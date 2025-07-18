@@ -70,7 +70,9 @@
             sel.appendChild(new Option(`${fmt} - ${row['Now Playing']} (${row['DJ']})`, i));
           });
           sel.disabled = false;
-          sel.addEventListener('change', () => document.getElementById('generateBtn').disabled = false);
+          sel.addEventListener('change', () => {
+            document.getElementById('generateBtn').disabled = false;
+          });
         })
         .catch(err => {
           console.error('Show data load error:', err);
@@ -80,13 +82,9 @@
         });
     }
 
-    // Load PSD template with path check
+    // Simple PSD loader without HEAD-check
     function loadTemplate() {
-      fetch('./template.psd', { method: 'HEAD' })
-        .then(resp => {
-          if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-          return PSD.fromURL('./template.psd');
-        })
+      PSD.fromURL('template.psd')
         .then(psd => {
           psd.parse();
           templateLayers = psd.tree().descendants()
@@ -116,10 +114,13 @@
                 imageData: !isText ? node.toPng() : null
               };
             });
+          // Clear any previous error
+          errorMsg.textContent = '';
+          console.log('PSD template loaded successfully');
         })
         .catch(err => {
           console.error('PSD load error:', err);
-          errorMsg.textContent = 'Failed to load PSD template. Ensure template.psd is in this folder and accessible.';
+          errorMsg.textContent = 'Failed to load PSD template. Check that template.psd exists at the site root and has CORS enabled.';
         });
     }
 
@@ -129,7 +130,10 @@
     });
 
     document.getElementById('generateBtn').addEventListener('click', () => {
-      if (!templateLayers) return alert('Template not loaded yet.');
+      if (!templateLayers) {
+        alert('Template not loaded yet.');
+        return;
+      }
       const show = shows[document.getElementById('showPicker').value];
       const canvas = document.getElementById('artCanvas');
       const ctx = canvas.getContext('2d');
@@ -149,12 +153,18 @@
           const key = layer.name.toLowerCase();
           if (key.includes('nowplaying')) content = show['Now Playing'];
           else if (key.includes('dj')) content = show['DJ'];
-          else if (key.includes('date')) content = new Date(show['Date']).toLocaleDateString('en-GB', { weekday:'short', day:'numeric', month:'short' }) + ` @ ${show['A-B']}`;
+          else if (key.includes('date')) {
+            content = new Date(show['Date'])
+              .toLocaleDateString('en-GB', { weekday:'short', day:'numeric', month:'short' })
+              + ` @ ${show['A-B']}`;
+          }
           ctx.fillText(content, layer.x, layer.y + layer.size);
         }
       });
 
-      setTimeout(() => document.getElementById('downloadBtn').disabled = false, 500);
+      setTimeout(() => {
+        document.getElementById('downloadBtn').disabled = false;
+      }, 500);
     });
 
     document.getElementById('downloadBtn').addEventListener('click', () => {
