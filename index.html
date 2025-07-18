@@ -17,14 +17,15 @@
       border-radius: 12px;
       box-shadow: 0 20px 40px rgba(0,0,0,0.4);
     }
-    select, button {
+    select, button, input[type=file] {
       padding: 10px 16px;
       font-size: 16px;
       border-radius: 8px;
       margin: 10px 5px;
       border: none;
+      background: #222;
+      color: #fff;
     }
-    select { min-width: 200px; }
     .error {
       color: #f66;
       margin-top: 10px;
@@ -33,6 +34,12 @@
 </head>
 <body>
   <h2>🎧 DJ Artwork Generator</h2>
+
+  <!-- PSD File Picker -->
+  <div>
+    <label for="psdInput">Load PSD Template:</label>
+    <input type="file" id="psdInput" accept=".psd">
+  </div>
 
   <div>
     <select id="showPicker" disabled>
@@ -54,125 +61,108 @@
     let templateLayers = null;
     let shows = [];
     const errorMsg = document.getElementById('errorMsg');
+    const psdInput = document.getElementById('psdInput');
 
-    // Fetch show data immediately
+    // Fetch show data
     function loadShowData() {
-      const url = 'https://script.google.com/macros/s/AKfycbw3QgJtZXB48I0BUMpTE5Dlo2kqMReNuD4jbiEVBaB1z49bSgzEkAgixkjHxwTKRwY0/exec';
-      fetch(url)
-        .then(response => response.json())
+      fetch('https://script.google.com/macros/s/AKfycbw3QgJtZXB48I0BUMpTE5Dlo2kqMReNuD4jbiEVBaB1z49bSgzEkAgixkjHxwTKRwY0/exec')
+        .then(r => r.json())
         .then(json => {
           shows = json.filter(r => r['Image URL']?.startsWith('http'));
           const sel = document.getElementById('showPicker');
           sel.innerHTML = '<option value="" disabled selected>-- Select a show --</option>';
-          shows.forEach((row, i) => {
+          shows.forEach((row,i) => {
             const d = new Date(row['Date']);
-            const fmt = d.toLocaleDateString('en-GB', { weekday:'short', day:'numeric', month:'short' });
-            sel.appendChild(new Option(`${fmt} - ${row['Now Playing']} (${row['DJ']})`, i));
+            const fmt = d.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'});
+            sel.appendChild(new Option(`${fmt} – ${row['Now Playing']} (${row['DJ']})`, i));
           });
           sel.disabled = false;
-          sel.addEventListener('change', () => {
-            document.getElementById('generateBtn').disabled = false;
-          });
+          sel.onchange = () => document.getElementById('generateBtn').disabled = false;
         })
-        .catch(err => {
-          console.error('Show data load error:', err);
-          const sel = document.getElementById('showPicker');
-          sel.innerHTML = '<option disabled>Error loading shows</option>';
-          errorMsg.textContent = 'Unable to fetch show list. Check network or JSON URL.';
+        .catch(e => {
+          console.error(e);
+          errorMsg.textContent = 'Failed to load show list.';
         });
     }
 
-    // Simple PSD loader without HEAD-check
-    function loadTemplate() {
-      PSD.fromURL('template.psd')
-        .then(psd => {
-          psd.parse();
-          templateLayers = psd.tree().descendants()
-            .filter(node => !node.isGroup())
-            .map(node => {
-              const isText = !!node.layer.text;
-              let textProps = {};
-              if (isText) {
-                const data = node.get('typeTool').data;
-                textProps = {
-                  text: data.text.replace(/\r/g, ''),
-                  font: data.fontName,
-                  size: data.font.sizes[0],
-                  color: `rgb(${data.font.colors[0].join(',')})`
-                };
-              }
-              return {
-                name: node.name,
-                type: isText ? 'text' : 'image',
-                x: node.left,
-                y: node.top,
-                width: node.width,
-                height: node.height,
-                opacity: node.layer.opacity / 255,
-                blendMode: node.blendMode,
-                ...textProps,
-                imageData: !isText ? node.toPng() : null
+    // Parse PSD from File
+    psdInput.addEventListener('change', async e => {
+      const file = e.target.files[0];
+      if (!file) return;
+      try {
+        const buffer = await file.arrayBuffer();
+        const psd = PSD.fromArrayBuffer(buffer);
+        psd.parse();
+        templateLayers = psd.tree().descendants()
+          .filter(n => !n.isGroup())
+          .map(n => {
+            const isText = !!n.layer.text;
+            let textProps = {};
+            if (isText) {
+              const d = n.get('typeTool').data;
+              textProps = {
+                text: d.text.replace(/\r/g,''),
+                font: d.fontName,
+                size: d.font.sizes[0],
+                color: `rgb(${d.font.colors[0].join(',')})`
               };
-            });
-          // Clear any previous error
-          errorMsg.textContent = '';
-          console.log('PSD template loaded successfully');
-        })
-        .catch(err => {
-          console.error('PSD load error:', err);
-          errorMsg.textContent = 'Failed to load PSD template. Check that template.psd exists at the site root and has CORS enabled.';
-        });
-    }
-
-    window.addEventListener('load', () => {
-      loadShowData();
-      loadTemplate();
+            }
+            return {
+              name: n.name, type: isText?'text':'image',
+              x: n.left, y: n.top, width: n.width, height: n.height,
+              opacity: n.layer.opacity/255, blendMode: n.blendMode,
+              ...textProps,
+              imageData: !isText?n.toPng():null
+            };
+          });
+        errorMsg.textContent = '';
+        loadShowData();
+      } catch(err) {
+        console.error(err);
+        errorMsg.textContent = 'Error parsing PSD.';
+      }
     });
 
-    document.getElementById('generateBtn').addEventListener('click', () => {
+    // Generate artwork
+    document.getElementById('generateBtn').onclick = () => {
       if (!templateLayers) {
-        alert('Template not loaded yet.');
+        alert('Please load a PSD template first.');
         return;
       }
       const show = shows[document.getElementById('showPicker').value];
-      const canvas = document.getElementById('artCanvas');
-      const ctx = canvas.getContext('2d');
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-
+      const ctx = document.getElementById('artCanvas').getContext('2d');
+      ctx.clearRect(0,0,1080,1080);
       templateLayers.forEach(layer => {
         ctx.globalAlpha = layer.opacity;
-        ctx.globalCompositeOperation = layer.blendMode || 'source-over';
-        if (layer.type === 'image') {
+        ctx.globalCompositeOperation = layer.blendMode||'source-over';
+        if (layer.type==='image') {
           const img = new Image();
           img.src = layer.imageData;
-          img.onload = () => ctx.drawImage(img, layer.x, layer.y, layer.width, layer.height);
+          img.onload = ()=>ctx.drawImage(img,layer.x,layer.y,layer.width,layer.height);
         } else {
           ctx.fillStyle = layer.color;
           ctx.font = `${layer.size}px '${layer.font}'`;
-          let content = layer.text;
-          const key = layer.name.toLowerCase();
-          if (key.includes('nowplaying')) content = show['Now Playing'];
-          else if (key.includes('dj')) content = show['DJ'];
-          else if (key.includes('date')) {
-            content = new Date(show['Date'])
-              .toLocaleDateString('en-GB', { weekday:'short', day:'numeric', month:'short' })
-              + ` @ ${show['A-B']}`;
-          }
-          ctx.fillText(content, layer.x, layer.y + layer.size);
+          let text = layer.text;
+          const k = layer.name.toLowerCase();
+          if(k.includes('nowplaying')) text = show['Now Playing'];
+          else if(k.includes('dj')) text = show['DJ'];
+          else if(k.includes('date')) text = new Date(show['Date'])
+            .toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'})
+            +` @ ${show['A-B']}`;
+          ctx.fillText(text, layer.x, layer.y + layer.size);
         }
       });
+      setTimeout(()=>document.getElementById('downloadBtn').disabled=false,500);
+    };
 
-      setTimeout(() => {
-        document.getElementById('downloadBtn').disabled = false;
-      }, 500);
-    });
-
-    document.getElementById('downloadBtn').addEventListener('click', () => {
+    // Download
+    document.getElementById('downloadBtn').onclick = () => {
       const link = document.createElement('a');
       link.download = 'dj_artwork.png';
       link.href = document.getElementById('artCanvas').toDataURL('image/png');
       link.click();
-    });
+    };
   </script>
 </body>
 </html>
+
