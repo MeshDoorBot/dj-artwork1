@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>🎧 DJ Artwork Generator</title>
   <style>
     body { 
@@ -37,7 +37,7 @@
 
   <div>
     <label for="psdInput">Load PSD Template:</label>
-    <input type="file" id="psdInput" accept=".psd">
+    <input type="file" id="psdInput" accept=".psd" />
   </div>
 
   <div>
@@ -52,18 +52,21 @@
   <canvas id="artCanvas" width="1080" height="1080"></canvas><br>
   <button id="downloadBtn" disabled>Download Image</button>
 
-  <script src="https://cdn.jsdelivr.net/npm/psd@3.1.0/dist/psd.min.js"></script>
+  <!-- Load PSD.js first to define the PSD global -->
+  <script src="https://unpkg.com/psd/dist/psd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/color-thief/2.3.2/color-thief.umd.js"></script>
 
   <script>
     let templateLayers = null;
     let shows = [];
+
     const errorMsg   = document.getElementById('errorMsg');
     const psdInput   = document.getElementById('psdInput');
     const showPicker = document.getElementById('showPicker');
     const generateBtn= document.getElementById('generateBtn');
+    const downloadBtn= document.getElementById('downloadBtn');
 
-    // Fetch show data immediately on load
+    // Load show list
     function loadShowData() {
       fetch('https://script.google.com/macros/s/AKfycbw3QgJtZXB48I0BUMpTE5Dlo2kqMReNuD4jbiEVBaB1z49bSgzEkAgixkjHxwTKRwY0/exec')
         .then(r => r.json())
@@ -76,7 +79,7 @@
             showPicker.appendChild(new Option(`${fmt} – ${row['Now Playing']} (${row['DJ']})`, i));
           });
           showPicker.disabled = false;
-          showPicker.onchange = () => { generateBtn.disabled = false; };
+          showPicker.onchange = () => generateBtn.disabled = false;
         })
         .catch(e => {
           console.error('Show data error:', e);
@@ -85,7 +88,7 @@
         });
     }
 
-    // Parse PSD from File with full error stack logging
+    // Parse PSD from ArrayBuffer, log full stack on error
     psdInput.addEventListener('change', async e => {
       const file = e.target.files[0];
       if (!file) return;
@@ -94,35 +97,37 @@
         const buffer = await file.arrayBuffer();
         const psd    = await PSD.fromArrayBuffer(buffer);
         await psd.parse();
+        console.log('✅ PSD parsed successfully');
 
-        templateLayers = psd.tree().descendants().filter(n => !n.isGroup()).map(n => {
-          const isText = !!n.layer.text;
-          let textProps = {};
-          if (isText) {
-            const d = n.get('typeTool').data;
-            textProps = {
-              text:  d.text.replace(/\r/g, ''),
-              font:  d.fontName,
-              size:  d.font.sizes[0],
-              color: `rgb(${d.font.colors[0].join(',')})`
+        templateLayers = psd.tree().descendants()
+          .filter(n => !n.isGroup())
+          .map(n => {
+            const isText = !!n.layer.text;
+            let textProps = {};
+            if (isText) {
+              const d = n.get('typeTool').data;
+              textProps = {
+                text:  d.text.replace(/\r/g, ''),
+                font:  d.fontName,
+                size:  d.font.sizes[0],
+                color: `rgb(${d.font.colors[0].join(',')})`
+              };
+            }
+            return {
+              name:      n.name,
+              type:      isText ? 'text' : 'image',
+              x:         n.left,
+              y:         n.top,
+              width:     n.width,
+              height:    n.height,
+              opacity:   n.layer.opacity / 255,
+              blendMode: n.blendMode,
+              ...textProps,
+              imageData: !isText ? n.toPng() : null
             };
-          }
-          return {
-            name:      n.name,
-            type:      isText ? 'text' : 'image',
-            x:         n.left,
-            y:         n.top,
-            width:     n.width,
-            height:    n.height,
-            opacity:   n.layer.opacity / 255,
-            blendMode: n.blendMode,
-            ...textProps,
-            imageData: !isText ? n.toPng() : null
-          };
-        });
+          });
 
         errorMsg.textContent = '';
-        console.log('✅ PSD parsed successfully');
       } catch (err) {
         console.error('🔴 PSD parse error stack:', err.stack || err);
         errorMsg.textContent = 'Error parsing PSD (see console for details)';
@@ -155,20 +160,18 @@
           else if (key.includes('dj'))       text = show['DJ'];
           else if (key.includes('date')) {
             text = new Date(show['Date'])
-              .toLocaleDateString('en-GB', { weekday:'short', day:'numeric', month:'short' }) +
+              .toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'}) +
               ` @ ${show['A-B']}`;
           }
           ctx.fillText(text, layer.x, layer.y + layer.size);
         }
       });
 
-      setTimeout(() => {
-        document.getElementById('downloadBtn').disabled = false;
-      }, 500);
+      setTimeout(() => { downloadBtn.disabled = false; }, 500);
     };
 
     // Download image
-    document.getElementById('downloadBtn').onclick = () => {
+    downloadBtn.onclick = () => {
       const link = document.createElement('a');
       link.download = 'dj_artwork.png';
       link.href     = document.getElementById('artCanvas').toDataURL('image/png');
