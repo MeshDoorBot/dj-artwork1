@@ -45,11 +45,12 @@
   <canvas id="artCanvas" width="1080" height="1080"></canvas><br>
   <button id="downloadBtn" disabled>Download Image</button>
 
-  <!-- 1) Include PSD.js UMD build first so `PSD` is defined globally -->
+  <!-- 1) Load PSD.js UMD build so `PSD` is defined globally -->
   <script src="https://unpkg.com/psd@3.3.0/dist/psd.min.js"></script>
   <!-- 2) Load Color Thief -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/color-thief/2.3.2/color-thief.umd.js"></script>
 
+  <!-- 3) Your custom generator code -->
   <script>
     document.addEventListener('DOMContentLoaded', () => {
       let templateLayers = null;
@@ -119,6 +120,7 @@
                 imageData: !isText ? n.toPng() : null
               };
             });
+          errorMsg.textContent = '';
         } catch(err) {
           console.error('🔴 PSD load/parse error:', err.stack || err);
           errorMsg.textContent = 'Error parsing PSD (see console).';
@@ -149,7 +151,7 @@
             else if (key.includes('dj'))       text = show['DJ'];
             else if (key.includes('date')) {
               text = new Date(show['Date'])
-                .toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'})
+                .toLocaleDateString('en-GB',{ weekday:'short', day:'numeric', month:'short' })
                 + ` @ ${show['A-B']}`;
             }
             ctx.fillText(text, layer.x, layer.y + layer.size);
@@ -166,6 +168,7 @@
         link.click();
       });
 
+      // Initialize
       loadShowData();
       loadTemplate();
     });
