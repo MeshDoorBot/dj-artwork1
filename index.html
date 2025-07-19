@@ -5,25 +5,50 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>🎧 DJ Artwork Generator</title>
   <style>
-    body { font-family: 'NeueHaasDisplay-Roman', sans-serif; background: #0c0c0c; color: #fff; padding: 20px; text-align: center; }
-    canvas { margin: 20px 0; border-radius: 12px; box-shadow: 0 20px 40px rgba(0,0,0,0.4); }
-    select, button, input[type=file] { padding: 10px 16px; font-size: 16px; border-radius: 8px; margin: 10px 5px; border: none; background: #222; color: #fff; }
-    .error { color: #f66; margin-top: 10px; }
+    body { 
+      font-family: 'NeueHaasDisplay-Roman', sans-serif; 
+      background: #0c0c0c; 
+      color: #fff; 
+      padding: 20px; 
+      text-align: center; 
+    }
+    canvas { 
+      margin: 20px 0; 
+      border-radius: 12px; 
+      box-shadow: 0 20px 40px rgba(0,0,0,0.4); 
+    }
+    select, button, input[type=file] { 
+      padding: 10px 16px; 
+      font-size: 16px; 
+      border-radius: 8px; 
+      margin: 10px 5px; 
+      border: none; 
+      background: #222; 
+      color: #fff; 
+    }
+    .error { 
+      color: #f66; 
+      margin-top: 10px; 
+    }
   </style>
 </head>
 <body>
   <h2>🎧 DJ Artwork Generator</h2>
+
   <div>
     <label for="psdInput">Load PSD Template:</label>
     <input type="file" id="psdInput" accept=".psd">
   </div>
+
   <div>
     <select id="showPicker" disabled>
       <option value="" disabled selected>-- Loading shows... --</option>
     </select>
     <button id="generateBtn" disabled>Generate Artwork</button>
   </div>
+
   <div id="errorMsg" class="error"></div>
+
   <canvas id="artCanvas" width="1080" height="1080"></canvas><br>
   <button id="downloadBtn" disabled>Download Image</button>
 
@@ -33,10 +58,10 @@
   <script>
     let templateLayers = null;
     let shows = [];
-    const errorMsg = document.getElementById('errorMsg');
-    const psdInput = document.getElementById('psdInput');
+    const errorMsg   = document.getElementById('errorMsg');
+    const psdInput   = document.getElementById('psdInput');
     const showPicker = document.getElementById('showPicker');
-    const generateBtn = document.getElementById('generateBtn');
+    const generateBtn= document.getElementById('generateBtn');
 
     // Fetch show data immediately on load
     function loadShowData() {
@@ -46,60 +71,61 @@
           shows = json.filter(r => r['Image URL']?.startsWith('http'));
           showPicker.innerHTML = '<option value="" disabled selected>-- Select a show --</option>';
           shows.forEach((row, i) => {
-            const d = new Date(row['Date']);
-            const fmt = d.toLocaleDateString('en-GB', {weekday:'short', day:'numeric', month:'short'});
+            const d   = new Date(row['Date']);
+            const fmt = d.toLocaleDateString('en-GB', { weekday:'short', day:'numeric', month:'short' });
             showPicker.appendChild(new Option(`${fmt} – ${row['Now Playing']} (${row['DJ']})`, i));
           });
           showPicker.disabled = false;
           showPicker.onchange = () => { generateBtn.disabled = false; };
         })
         .catch(e => {
-          console.error(e);
+          console.error('Show data error:', e);
           showPicker.innerHTML = '<option disabled>Error loading shows</option>';
           errorMsg.textContent = 'Failed to load show list.';
         });
     }
 
-    // Parse PSD from File using ArrayBuffer
+    // Parse PSD from File with full error stack logging
     psdInput.addEventListener('change', async e => {
       const file = e.target.files[0];
       if (!file) return;
 
       try {
-        const arrayBuffer = await file.arrayBuffer();
-        const psd = await PSD.fromArrayBuffer(arrayBuffer);
+        const buffer = await file.arrayBuffer();
+        const psd    = await PSD.fromArrayBuffer(buffer);
         await psd.parse();
 
-        templateLayers = psd.tree().descendants()
-          .filter(n => !n.isGroup())
-          .map(n => {
-            const isText = !!n.layer.text;
-            let textProps = {};
-            if (isText) {
-              const d = n.get('typeTool').data;
-              textProps = {
-                text: d.text.replace(/\r/g, ''),
-                font: d.fontName,
-                size: d.font.sizes[0],
-                color: `rgb(${d.font.colors[0].join(',')})`
-              };
-            }
-            return {
-              name: n.name,
-              type: isText ? 'text' : 'image',
-              x: n.left, y: n.top,
-              width: n.width, height: n.height,
-              opacity: n.layer.opacity / 255,
-              blendMode: n.blendMode,
-              ...textProps,
-              imageData: !isText ? n.toPng() : null
+        templateLayers = psd.tree().descendants().filter(n => !n.isGroup()).map(n => {
+          const isText = !!n.layer.text;
+          let textProps = {};
+          if (isText) {
+            const d = n.get('typeTool').data;
+            textProps = {
+              text:  d.text.replace(/\r/g, ''),
+              font:  d.fontName,
+              size:  d.font.sizes[0],
+              color: `rgb(${d.font.colors[0].join(',')})`
             };
-          });
+          }
+          return {
+            name:      n.name,
+            type:      isText ? 'text' : 'image',
+            x:         n.left,
+            y:         n.top,
+            width:     n.width,
+            height:    n.height,
+            opacity:   n.layer.opacity / 255,
+            blendMode: n.blendMode,
+            ...textProps,
+            imageData: !isText ? n.toPng() : null
+          };
+        });
 
         errorMsg.textContent = '';
-      } catch(err) {
-        console.error('PSD parse error:', err);
-        errorMsg.textContent = 'Error parsing PSD: ' + err.message;
+        console.log('✅ PSD parsed successfully');
+      } catch (err) {
+        console.error('🔴 PSD parse error stack:', err.stack || err);
+        errorMsg.textContent = 'Error parsing PSD (see console for details)';
       }
     });
 
@@ -110,7 +136,7 @@
         return;
       }
       const show = shows[showPicker.value];
-      const ctx = document.getElementById('artCanvas').getContext('2d');
+      const ctx  = document.getElementById('artCanvas').getContext('2d');
       ctx.clearRect(0, 0, 1080, 1080);
 
       templateLayers.forEach(layer => {
@@ -122,14 +148,14 @@
           img.onload = () => ctx.drawImage(img, layer.x, layer.y, layer.width, layer.height);
         } else {
           ctx.fillStyle = layer.color;
-          ctx.font = `${layer.size}px '${layer.font}'`;
-          let text = layer.text;
-          const key = layer.name.toLowerCase();
+          ctx.font      = `${layer.size}px '${layer.font}'`;
+          let text      = layer.text;
+          const key     = layer.name.toLowerCase();
           if (key.includes('nowplaying')) text = show['Now Playing'];
-          else if (key.includes('dj')) text = show['DJ'];
+          else if (key.includes('dj'))       text = show['DJ'];
           else if (key.includes('date')) {
             text = new Date(show['Date'])
-              .toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'}) +
+              .toLocaleDateString('en-GB', { weekday:'short', day:'numeric', month:'short' }) +
               ` @ ${show['A-B']}`;
           }
           ctx.fillText(text, layer.x, layer.y + layer.size);
@@ -145,11 +171,11 @@
     document.getElementById('downloadBtn').onclick = () => {
       const link = document.createElement('a');
       link.download = 'dj_artwork.png';
-      link.href = document.getElementById('artCanvas').toDataURL('image/png');
+      link.href     = document.getElementById('artCanvas').toDataURL('image/png');
       link.click();
     };
 
-    // Initialize show loading
+    // Initialize
     window.addEventListener('load', loadShowData);
   </script>
 </body>
