@@ -45,8 +45,9 @@
   <canvas id="artCanvas" width="1080" height="1080"></canvas><br>
   <button id="downloadBtn" disabled>Download Image</button>
 
-  <!-- PSD.js must load before our code -->
-  <script src="https://cdn.jsdelivr.net/npm/psd@3.3.0/dist/psd.min.js"></script>
+  <!-- 1) Load PSD.js UMD build from Unpkg, which defines `PSD` globally -->
+  <script src="https://unpkg.com/psd@3.1.0/dist/psd.min.js"></script>
+  <!-- 2) Load Color Thief -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/color-thief/2.3.2/color-thief.umd.js"></script>
 
   <script>
@@ -61,7 +62,7 @@
       const canvas      = document.getElementById('artCanvas');
       const ctx         = canvas.getContext('2d');
 
-      // 1) Load the list of shows
+      // 1) Load show data
       function loadShowData() {
         fetch('https://script.google.com/macros/s/AKfycbw3QgJtZXB48I0BUMpTE5Dlo2kqMReNuD4jbiEVBaB1z49bSgzEkAgixkjHxwTKRwY0/exec')
           .then(r => r.json())
@@ -82,15 +83,15 @@
           });
       }
 
-      // 2) Fetch & parse the PSD from the same origin
+      // 2) Load & parse the PSD template
       async function loadTemplate() {
         try {
           const res    = await fetch('template.psd');
-          const buffer = await res.arrayBuffer();
-          const psd    = await PSD.fromArrayBuffer(buffer);
+          const buf    = await res.arrayBuffer();
+          const psd    = await PSD.fromArrayBuffer(buf);
           await psd.parse();
           console.log('✅ PSD parsed successfully');
-          
+
           templateLayers = psd.tree().descendants()
             .filter(n => !n.isGroup())
             .map(n => {
@@ -112,27 +113,26 @@
                 y:         n.top,
                 width:     n.width,
                 height:    n.height,
-                opacity:   n.layer.opacity/255,
+                opacity:   n.layer.opacity / 255,
                 blendMode: n.blendMode,
                 ...textProps,
                 imageData: !isText ? n.toPng() : null
               };
             });
-          errorMsg.textContent = '';
         } catch(err) {
           console.error('🔴 PSD load/parse error:', err.stack || err);
           errorMsg.textContent = 'Error parsing PSD (see console).';
         }
       }
 
-      // 3) Draw the artwork when user clicks
+      // 3) Draw on Generate
       generateBtn.addEventListener('click', () => {
         if (!templateLayers) {
           alert('Template not loaded yet.');
           return;
         }
         const show = shows[showPicker.value];
-        ctx.clearRect(0, 0, 1080, 1080);
+        ctx.clearRect(0,0,1080,1080);
         templateLayers.forEach(layer => {
           ctx.globalAlpha = layer.opacity;
           ctx.globalCompositeOperation = layer.blendMode || 'source-over';
@@ -149,24 +149,23 @@
             else if (key.includes('dj'))       text = show['DJ'];
             else if (key.includes('date')) {
               text = new Date(show['Date'])
-                .toLocaleDateString('en-GB',{ weekday:'short', day:'numeric', month:'short' })
+                .toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'})
                 + ` @ ${show['A-B']}`;
             }
             ctx.fillText(text, layer.x, layer.y + layer.size);
           }
         });
-        setTimeout(() => { downloadBtn.disabled = false; }, 500);
+        setTimeout(() => downloadBtn.disabled = false, 500);
       });
 
-      // 4) Download button
+      // 4) Download
       downloadBtn.addEventListener('click', () => {
-        const link   = document.createElement('a');
+        const link = document.createElement('a');
         link.download = 'dj_artwork.png';
         link.href     = canvas.toDataURL('image/png');
         link.click();
       });
 
-      // Initialize both loads
       loadShowData();
       loadTemplate();
     });
