@@ -45,8 +45,8 @@
   <canvas id="artCanvas" width="1080" height="1080"></canvas><br>
   <button id="downloadBtn" disabled>Download Image</button>
 
-  <!-- 1) Load PSD.js UMD build from Unpkg, which defines `PSD` globally -->
-  <script src="https://unpkg.com/psd@3.1.0/dist/psd.min.js"></script>
+  <!-- 1) Include PSD.js UMD build first so `PSD` is defined globally -->
+  <script src="https://unpkg.com/psd@3.3.0/dist/psd.min.js"></script>
   <!-- 2) Load Color Thief -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/color-thief/2.3.2/color-thief.umd.js"></script>
 
@@ -83,7 +83,7 @@
           });
       }
 
-      // 2) Load & parse the PSD template
+      // 2) Fetch & parse the PSD template
       async function loadTemplate() {
         try {
           const res    = await fetch('template.psd');
