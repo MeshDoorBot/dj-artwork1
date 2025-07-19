@@ -1,15 +1,15 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>🎧 DJ Artwork Generator</title>
-<style>
-  body { font-family: 'NeueHaasDisplay-Roman', sans-serif; background: #0c0c0c; color: #fff; padding: 20px; text-align: center; }
-  canvas { margin: 20px 0; border-radius: 12px; box-shadow: 0 20px 40px rgba(0,0,0,0.4); }
-  select, button, input[type=file] { padding: 10px 16px; font-size: 16px; border-radius: 8px; margin: 10px 5px; border: none; background: #222; color: #fff; }
-  .error { color: #f66; margin-top: 10px; }
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🎧 DJ Artwork Generator</title>
+  <style>
+    body { font-family: 'NeueHaasDisplay-Roman', sans-serif; background: #0c0c0c; color: #fff; padding: 20px; text-align: center; }
+    canvas { margin: 20px 0; border-radius: 12px; box-shadow: 0 20px 40px rgba(0,0,0,0.4); }
+    select, button, input[type=file] { padding: 10px 16px; font-size: 16px; border-radius: 8px; margin: 10px 5px; border: none; background: #222; color: #fff; }
+    .error { color: #f66; margin-top: 10px; }
+  </style>
 </head>
 <body>
   <h2>🎧 DJ Artwork Generator</h2>
@@ -60,36 +60,46 @@
         });
     }
 
-    // Parse PSD from File
+    // Parse PSD from File using ArrayBuffer
     psdInput.addEventListener('change', async e => {
       const file = e.target.files[0];
       if (!file) return;
-      const url = URL.createObjectURL(file);
+
       try {
-        const psd = await PSD.fromURL(url);
+        const arrayBuffer = await file.arrayBuffer();
+        const psd = await PSD.fromArrayBuffer(arrayBuffer);
         await psd.parse();
-        templateLayers = psd.tree().descendants().filter(n => !n.isGroup()).map(n => {
-          const isText = !!n.layer.text;
-          let textProps = {};
-          if (isText) {
-            const d = n.get('typeTool').data;
-            textProps = { text: d.text.replace(/\r/g,''), font: d.fontName, size: d.font.sizes[0], color: `rgb(${d.font.colors[0].join(',')})` };
-          }
-          return {
-            name:n.name,
-            type:isText?'text':'image',
-            x:n.left, y:n.top, width:n.width, height:n.height,
-            opacity:n.layer.opacity/255, blendMode:n.blendMode,
-            ...textProps,
-            imageData: !isText?n.toPng():null
-          };
-        });
-        URL.revokeObjectURL(url);
+
+        templateLayers = psd.tree().descendants()
+          .filter(n => !n.isGroup())
+          .map(n => {
+            const isText = !!n.layer.text;
+            let textProps = {};
+            if (isText) {
+              const d = n.get('typeTool').data;
+              textProps = {
+                text: d.text.replace(/\r/g, ''),
+                font: d.fontName,
+                size: d.font.sizes[0],
+                color: `rgb(${d.font.colors[0].join(',')})`
+              };
+            }
+            return {
+              name: n.name,
+              type: isText ? 'text' : 'image',
+              x: n.left, y: n.top,
+              width: n.width, height: n.height,
+              opacity: n.layer.opacity / 255,
+              blendMode: n.blendMode,
+              ...textProps,
+              imageData: !isText ? n.toPng() : null
+            };
+          });
+
         errorMsg.textContent = '';
       } catch(err) {
-        console.error('PSD error:', err);
+        console.error('PSD parse error:', err);
         errorMsg.textContent = 'Error parsing PSD: ' + err.message;
-        URL.revokeObjectURL(url);
       }
     });
 
@@ -101,7 +111,8 @@
       }
       const show = shows[showPicker.value];
       const ctx = document.getElementById('artCanvas').getContext('2d');
-      ctx.clearRect(0,0,1080,1080);
+      ctx.clearRect(0, 0, 1080, 1080);
+
       templateLayers.forEach(layer => {
         ctx.globalAlpha = layer.opacity;
         ctx.globalCompositeOperation = layer.blendMode || 'source-over';
@@ -124,7 +135,10 @@
           ctx.fillText(text, layer.x, layer.y + layer.size);
         }
       });
-      setTimeout(() => document.getElementById('downloadBtn').disabled = false, 500);
+
+      setTimeout(() => {
+        document.getElementById('downloadBtn').disabled = false;
+      }, 500);
     };
 
     // Download image
@@ -135,7 +149,7 @@
       link.click();
     };
 
-    // Initialize show data load
+    // Initialize show loading
     window.addEventListener('load', loadShowData);
   </script>
 </body>
